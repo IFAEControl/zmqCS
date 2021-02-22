@@ -101,7 +101,7 @@ class zmqServer(ABC):
         # When the message it is reconstructed, it calls self.execute_command(message) and returns back to the server
         # an answer of the command or an error to the client
         answer = None
-        #print(f"this is a message {message}")
+        msg = None
         try:
             msg = MessageBase.from_bytes(message)
             if msg.type == MessageType.CMD:
@@ -121,7 +121,8 @@ class zmqServer(ABC):
         finally:
             if answer is None:
                 answer = ErrorMSG(msg="Unknown thing happened. Answer was not set")
-                log.debug(f"There was no answer from the command {msg.as_json}")
+                if msg:
+                    log.debug(f"There was no answer from the command {msg.as_json}")
             if isinstance(answer, CommandAns):
                 answer.set_end_time()
             return answer

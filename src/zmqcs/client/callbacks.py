@@ -15,6 +15,7 @@ __email__ = 'otger@ifae.es'
 
 from abc import ABC, abstractmethod
 
+
 class AsyncCallback(ABC):
     def __init__(self):
         self._num_calls = 0

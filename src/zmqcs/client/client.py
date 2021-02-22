@@ -86,8 +86,7 @@ class zmqClient(object):
         This is called from the async thread
         """
         if self._async_enabled:
-
-            log.debug(f"Petition to subscribe to topic '{topic}'")
+            # log.debug(f"Petition to subscribe cb '{callback.__class__.__name__}' to topic '{topic}' ")
             if not isinstance(topic, bytes):
                 topic = topic.encode('utf-8')
 
@@ -100,7 +99,8 @@ class zmqClient(object):
             self._callbacks[topic].append(callback)
             self._sub_socket.subscribe(topic)
             self._as.cb_reg(topic)
-            log.debug(f"Subscribed callback to topic '{topic}'")
+            log.debug(f"Subscribed cb '{callback.__class__.__name__}' to topic '{topic}'")
+            log.debug(f"Currently, there are {len(self._callbacks[topic])} callbacks on topic '{topic}'")
         else:
             log.error(f"Tried to subscribe to topic '{topic}' but async is not enabled")
 
