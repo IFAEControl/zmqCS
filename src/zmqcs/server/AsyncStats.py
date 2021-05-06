@@ -13,7 +13,7 @@ __version__ = '0.1'
 __maintainer__ = 'Otger Ballester'
 __email__ = 'otger@ifae.es'
 
-from datetime import datetime
+from datetime import datetime, timezone
 
 
 class PubStat(object):
@@ -21,12 +21,12 @@ class PubStat(object):
         self.topic = topic
         self._timestamps = []
         self._total_pub = 0
-        self._last_clean = datetime.utcnow().timestamp()
-        self._created = datetime.utcnow().timestamp()
+        self._last_clean = datetime.now(tz=timezone.utc).timestamp()
+        self._created = datetime.now(tz=timezone.utc).timestamp()
 
     def pub(self):
         self._total_pub += 1
-        now = datetime.utcnow().timestamp()
+        now = datetime.now(tz=timezone.utc).timestamp()
         self._timestamps.append(now)
         self._clean(now)
 
@@ -37,7 +37,7 @@ class PubStat(object):
 
     @property
     def stats(self):
-        now = datetime.utcnow().timestamp()
+        now = datetime.now(tz=timezone.utc).timestamp()
         self._clean(now)
         return {
             'total_pub': self._total_pub,
