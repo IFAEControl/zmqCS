@@ -18,4 +18,5 @@ class Defaults:
     repreq_port = 56485
     pubsub_port = 56486
     sub_timeout = 2000
+    req_timeout = 1000
     exec_time_warning = 5
