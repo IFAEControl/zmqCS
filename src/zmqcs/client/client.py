@@ -43,9 +43,7 @@ class zmqClient(object):
         self._last_req_endpoint = f"tcp://{ip}:{req_port}"
         self._ctx = zmq.Context()
         #  Socket to talk to server
-        self._req_socket = self._ctx.socket(zmq.REQ)
-        self._req_socket.setsockopt(zmq.RCVTIMEO, self._req_timeout)
-        self._req_socket.connect(self._last_req_endpoint)
+        self._create_or_reset_req_socket()
         log.debug(f"Connected REQ socket to endpoint: {self._last_req_endpoint}")
 
         if self._async_enabled:
@@ -57,13 +55,15 @@ class zmqClient(object):
         log.info('Initialized sockets')
         self.connected = True
 
-    def _reset_req_socket(self):
+    def _create_or_reset_req_socket(self):
         if self._last_req_endpoint:
-            self._req_socket.close()
+            if self._req_socket:
+                self._req_socket.close()
             self._req_socket = self._ctx.socket(zmq.REQ)
+            self._req_socket.setsockopt(zmq.LINGER, 1)
             self._req_socket.setsockopt(zmq.RCVTIMEO, self._req_timeout)
             self._req_socket.connect(self._last_req_endpoint)
-            log.debug(f"Reconnected REQ socket to endpoint: {self._last_req_endpoint}")
+            log.debug(f"Connected REQ socket to endpoint: {self._last_req_endpoint}")
 
     def _reset_sub_socket(self):
         if self._last_sub_endpoint:
@@ -81,7 +81,7 @@ class zmqClient(object):
             log.debug('Joined pubsub thread')
         self.connected = False
         if self._req_socket:
-            self._req_socket.close()
+            self._req_socket.close(linger=1)
             self._req_socket = None
         # self._sub_socket is closed when leaving the thread
         if self._ctx:
@@ -187,7 +187,7 @@ class zmqClient(object):
             self._req_socket.send(cmd.as_bytes)
             ans_bytes = self._req_socket.recv()
         except zmq.error.Again:
-            self._reset_req_socket()
+            self._create_or_reset_req_socket()
             raise
         # log.debug(f"Received answer from server for command '{cmd.command}")
         return MessageBase.from_bytes(ans_bytes)
