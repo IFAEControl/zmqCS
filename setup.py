@@ -21,7 +21,7 @@ with open(os.path.join(here, 'README.md')) as fh:
 # print(find_packages(exclude=('tests',)))
 setup(
       name="zmqcs",
-      version="0.1.0",
+      version="0.1.1",
       description="Client Server implementation made with zmq",
       long_description_content_type="text/markdown",
       long_description=long_description,
