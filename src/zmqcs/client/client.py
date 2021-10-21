@@ -20,7 +20,7 @@ log = get_logger('zmqClient')
 
 
 class zmqClient(object):
-    def __init__(self, en_async=True, async_timeout=Defaults.sub_timeout):
+    def __init__(self, en_async=True, async_timeout=Defaults.sub_timeout, req_timeout=Defaults.req_timeout):
         self.connected = False
         self._ctx = None
         self._req_socket = None
@@ -32,25 +32,46 @@ class zmqClient(object):
         self._async_queue = queue.Queue()
         self._as = AsyncStats()
         self._async_timeout = async_timeout
+        self._req_timeout = req_timeout
         self._callbacks = {}
+        self._last_req_endpoint = None
+        self._last_sub_endpoint = None
 
     def connect(self, ip='localhost',
                 req_port=Defaults.repreq_port,
                 async_port=Defaults.pubsub_port):
+        self._last_req_endpoint = f"tcp://{ip}:{req_port}"
         self._ctx = zmq.Context()
         #  Socket to talk to server
-        self._req_socket = self._ctx.socket(zmq.REQ)
-        # self._req_socket.setsockopt(zmq.RCVTIMEO, 1000)
-        self._req_socket.connect(f"tcp://{ip}:{req_port}")
-        log.debug(f"Connected REQ socket to port {req_port}")
+        self._create_or_reset_req_socket()
+        log.debug(f"Connected REQ socket to endpoint: {self._last_req_endpoint}")
 
         if self._async_enabled:
+            self._last_sub_endpoint = f"tcp://{ip}:{async_port}"
             self._sub_socket = self._ctx.socket(zmq.SUB)
-            self._sub_socket.connect(f"tcp://{ip}:{async_port}")
+            self._sub_socket.connect(self._last_sub_endpoint)
             self._sub_socket.setsockopt(zmq.RCVTIMEO, self._async_timeout)
-            log.debug(f"Connected SUB socket to port {async_port}")
+            log.debug(f"Connected SUB socket to endpoint {self._last_sub_endpoint}")
         log.info('Initialized sockets')
         self.connected = True
+
+    def _create_or_reset_req_socket(self):
+        if self._last_req_endpoint:
+            if self._req_socket:
+                self._req_socket.close()
+            self._req_socket = self._ctx.socket(zmq.REQ)
+            self._req_socket.setsockopt(zmq.LINGER, 1)
+            self._req_socket.setsockopt(zmq.RCVTIMEO, self._req_timeout)
+            self._req_socket.connect(self._last_req_endpoint)
+            log.debug(f"Connected REQ socket to endpoint: {self._last_req_endpoint}")
+
+    def _reset_sub_socket(self):
+        if self._last_sub_endpoint:
+            self._sub_socket.close()
+            self._sub_socket = self._ctx.socket(zmq.SUB)
+            self._sub_socket.connect(self._last_sub_endpoint)
+            self._sub_socket.setsockopt(zmq.RCVTIMEO, self._async_timeout)
+            log.debug(f"Reconnected SUB socket to endpoint {self._last_sub_endpoint}")
 
     def close(self):
         if self._async_th:
@@ -60,7 +81,7 @@ class zmqClient(object):
             log.debug('Joined pubsub thread')
         self.connected = False
         if self._req_socket:
-            self._req_socket.close()
+            self._req_socket.close(linger=1)
             self._req_socket = None
         # self._sub_socket is closed when leaving the thread
         if self._ctx:
@@ -136,7 +157,9 @@ class zmqClient(object):
                     else:
                         self._process_callbacks(topic=topic, async_msg=async_msg)
                 except zmq.error.Again:
+                    # self._reset_sub_socket()
                     continue
+
             log.info('Out of pubsub loop')
             if self._sub_socket:
                 self._sub_socket.close()
@@ -160,8 +183,12 @@ class zmqClient(object):
         if not issubclass(type(cmd), CommandMSG):
             log.debug('Bad command, command should be of type CommandMSG')
             raise Exception("Bad command, command should be of type CommandMSG")
-        self._req_socket.send(cmd.as_bytes)
-        ans_bytes = self._req_socket.recv()
+        try:
+            self._req_socket.send(cmd.as_bytes)
+            ans_bytes = self._req_socket.recv()
+        except zmq.error.Again:
+            self._create_or_reset_req_socket()
+            raise
         # log.debug(f"Received answer from server for command '{cmd.command}")
         return MessageBase.from_bytes(ans_bytes)
 
